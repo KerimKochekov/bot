@@ -141,7 +141,10 @@ def main():
     try:
         if any(not os.environ.get(name) for name in (*CREDENTIAL_KEYS, 'VISA_STATE_KEY')):
             raise watcher.CheckFailed('Required GitHub Actions secrets are missing.')
+        restored = path.exists()
         state = load_checkpoint(path, key)
+        if restored:
+            LOG.info('Encrypted monitor state restored; notification history preserved.')
         watcher.verify_telegram()
         if os.environ.get('VISA_SEND_TEST_MESSAGES') == 'true':
             while state['telegram_tests_sent'] < 2:
@@ -149,6 +152,7 @@ def main():
                 watcher.notify(f'Visa checker hosted test {number}/2: Telegram is awake. '
                                'This message was sent by GitHub Actions without your Mac.')
                 state['telegram_tests_sent'] = number
+                LOG.info('Hosted Telegram test %s/2 delivered.', number)
                 save_checkpoint(path, key, state)
         result = perform_check(state, reset_login_block=(
             os.environ.get('VISA_RESET_LOGIN_BLOCK') == 'true'))
