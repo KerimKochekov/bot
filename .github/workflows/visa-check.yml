@@ -1,6 +1,8 @@
 name: Schengen visa availability
 
 on:
+  push:
+    branches: [main]
   schedule:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
@@ -38,10 +40,21 @@ jobs:
         run: pip install -r requirements-actions.txt
       - name: Test detection and encrypted state
         run: python -m unittest -v test_visa_watcher test_visa_runtime test_visa_actions
-      - name: Install supported stable Chrome and system dependencies
+      - name: Verify installed stable Chrome
         run: |
-          python -m playwright install --with-deps chrome
           google-chrome --version
+          xvfb-run -a python - <<'PY'
+          from playwright.sync_api import sync_playwright
+          with sync_playwright() as playwright:
+              browser = playwright.chromium.launch(channel='chrome', headless=False)
+              try:
+                  page = browser.new_page()
+                  page.set_content('<title>Browser readiness</title>')
+                  assert page.title() == 'Browser readiness'
+              finally:
+                  browser.close()
+          print('Installed stable Chrome is ready.')
+          PY
       - name: Restore encrypted monitor state
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
