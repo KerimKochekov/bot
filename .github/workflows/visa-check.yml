@@ -1,8 +1,6 @@
 name: Schengen visa availability
 
 on:
-  push:
-    branches: [main]
   schedule:
     - cron: '7,22,37,52 * * * *'
   workflow_dispatch:
