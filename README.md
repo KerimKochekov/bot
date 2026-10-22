@@ -28,6 +28,8 @@ If the encryption key changes, delete the old `visa-state-v1-` caches before the
 
 Prenotami may block hosted browsers. A Telegram test alone does not establish that unattended availability checks work. Security challenges require another supported access method; the monitor does not bypass them.
 
+The runner uses stable Google Chrome, one of Prenotami's [supported browsers](https://conslondra.esteri.it/en/info-utili/f-a-q/faq-sistema-di-prenotazione/). Automatic page redirects can finish before a verification screen is declared blocked. The checker never clicks challenge controls or fills verification codes. Failure diagnostics contain fixed categories only, without page text, form values or URLs.
+
 ## Validation
 
 ```

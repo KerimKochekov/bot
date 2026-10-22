@@ -3,6 +3,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -85,16 +86,57 @@ def hosted_failure(error):
         'Availability is unknown. Check the workflow status.')
 
 
+def browser_diagnostics(page):
+    """Fixed diagnostic categories only: no URLs, page text or input values."""
+    host = (urlparse(page.url).hostname or '').lower()
+    if host == 'prenotami.esteri.it':
+        destination = 'prenotami'
+    elif host == 'iam.esteri.it':
+        destination = 'official_sign_in'
+    elif host == 'perfdrive.com' or host.endswith('.perfdrive.com'):
+        destination = 'radware_security_service'
+    elif host == 'challenges.cloudflare.com':
+        destination = 'cloudflare_security_service'
+    else:
+        destination = 'other_destination'
+    text = watcher.body_text(page)
+    signals = []
+    patterns = {
+        'browser_check': r'checking your browser|browser verification|verifying your browser',
+        'human_verification': r'verify.{0,25}human|confirm.{0,25}human|captcha|security check',
+        'access_denied': r'access denied|accesso negato|unusual traffic|too many requests',
+        'verification_code': r'one.time (?:code|password)|verification code|codice di verifica',
+    }
+    for name, pattern in patterns.items():
+        if re.search(pattern, text, re.I):
+            signals.append(name)
+    def visible(selector):
+        return page.locator(selector).filter(visible=True).count() > 0
+    return {'destination': destination, 'signals': signals,
+            'password_form_visible': visible('input[type="password"]'),
+            'captcha_control_visible': visible(
+                'iframe[src*="recaptcha"], iframe[src*="hcaptcha"], input[name*="captcha" i]'),
+            'otp_input_visible': visible('input[autocomplete="one-time-code"]'),
+            'service_list_visible': visible('#dataTableServices')}
+
+
 def check_browser(state):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=False)
+        browser = playwright.chromium.launch(channel='chrome', headless=False)
         try:
             context = browser.new_context(storage_state=state['browser'],
                                           viewport={'width': 1280, 'height': 900})
             page = context.new_page()
             try:
                 return watcher.check(page)
+            except Exception:
+                try:
+                    LOG.warning('Browser diagnostic: %s', json.dumps(browser_diagnostics(page),
+                                                                    sort_keys=True))
+                except Exception:
+                    LOG.warning('Browser diagnostic unavailable.')
+                raise
             finally:
                 try:
                     state['browser'] = official_browser_state(context.storage_state(indexed_db=True))

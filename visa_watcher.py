@@ -19,6 +19,8 @@ from visa_runtime import load_environment, telegram
 ROOT = Path(os.environ.get('VISA_DATA_DIR', Path(__file__).resolve().parent)).expanduser().resolve()
 BASE = 'https://prenotami.esteri.it'
 INTERVAL = 15 * 60
+LOGIN_TIMEOUT = 60
+BOOKING_TIMEOUT = 40
 TIMEZONE = ZoneInfo('Asia/Ashgabat')
 STATE_FILE = ROOT / 'visa-state.json'
 STATUS_FILE = ROOT / 'visa-status.json'
@@ -156,13 +158,17 @@ def find_book_navigation(page):
 
 def ensure_login(page):
     page.goto(BASE + '/Services', wait_until='domcontentloaded', timeout=60000)
-    deadline = time.monotonic() + 60
+    deadline = time.monotonic() + LOGIN_TIMEOUT
     submitted = False
+    verification_pending = False
     while time.monotonic() < deadline:
         text = body_text(page)
-        if human_verification(page, text):
-            raise CheckFailed('Prenotami requires a security check or verification code. '
-                              'Complete it in the checker browser; the next check is in 15 minutes.')
+        verification_pending = human_verification(page, text)
+        if verification_pending:
+            # Give normal browser scripts/redirects time to finish. Never click a
+            # challenge, fill a verification code, or enter credentials here.
+            page.wait_for_timeout(500)
+            continue
         if page.locator('#dataTableServices').is_visible():
             # The service name is language-independent in this embassy's listing.
             return
@@ -192,6 +198,9 @@ def ensure_login(page):
             if navigation.count() == 1 and navigation.is_visible():
                 navigation.click(timeout=15000)
         page.wait_for_timeout(500)
+    if verification_pending:
+        raise CheckFailed('Prenotami requires a security check or verification code. '
+                          'Complete it in the checker browser; the next check is in 15 minutes.')
     raise CheckFailed('Login or the service list did not finish loading. Availability is unknown.')
 
 
@@ -216,7 +225,8 @@ def check(page):
     page.on('dialog', handle_dialog)
     try:
         book.click(timeout=30000)
-        deadline = time.monotonic() + 40
+        deadline = time.monotonic() + BOOKING_TIMEOUT
+        verification_pending = False
         while time.monotonic() < deadline:
             text = body_text(page) + '\n' + '\n'.join(dialogs)
             path = urlparse(page.url).path
@@ -224,12 +234,13 @@ def check(page):
                             and bool(re.search(r'/Services/.*(?:Booking|Calendar)', path, re.I)))
             status = classify(text, human_check=human_verification(page, text),
                               calendar=page.evaluate(CALENDAR_SCRIPT), booking_flow=booking_flow)
-            if status == 'action_required':
-                raise CheckFailed('Prenotami requires a security check or verification code. '
-                                  'Complete it in the checker browser; the next check is in 15 minutes.')
+            verification_pending = status == 'action_required'
             if status in {'booked', 'calendar_open'}:
                 return status
             page.wait_for_timeout(500)
+        if verification_pending:
+            raise CheckFailed('Prenotami requires a security check or verification code. '
+                              'Complete it in the checker browser; the next check is in 15 minutes.')
         raise CheckFailed('The booking button did not show a recognized calendar or fully-booked '
                           'message. Inspect the checker browser. Availability is unknown.')
     finally:
