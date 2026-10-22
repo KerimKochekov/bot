@@ -2,6 +2,8 @@
 
 Checks **Book → Visas → Schengen visa to Italy and France → Book** at the Italian Embassy in Ashgabat and sends alerts to a private Telegram chat. It never submits a reservation or solves a CAPTCHA.
 
+**Hosted validation status (22 October 2026):** Telegram delivery works, but Prenotami presents a Radware CAPTCHA to the GitHub runner. The [stable Chrome live test](https://github.com/KerimKochekov/bot/actions/runs/39821807073) remained **unknown** after waiting for automatic page loading to finish. No successful availability check has yet been verified on GitHub. Scheduled attempts remain enabled; this deployment cannot currently replace a working browser monitor.
+
 GitHub Actions runs one check at minutes **07, 22, 37 and 52 of each hour (UTC)**, independently of any personal computer. Scheduled runs can be delayed or dropped by GitHub. Public repositories' schedules are automatically disabled after 60 days without repository activity; check Actions periodically. This is a best-effort monitor, not a guaranteed 24/7 service.
 
 ## Setup
